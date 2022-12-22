@@ -16,7 +16,7 @@ resource "aws_iam_openid_connect_provider" "github_oidc" {
 module "iam_github_oidc_role" {
   source = "terraform-aws-modules/iam/aws//modules/iam-github-oidc-role"
 
-  name = "GitHubOIDCRole"
+  name = "iam_github_oidc"
 
   # This should be updated to suit your organization, repository, references/branches, etc.
   subjects = [
