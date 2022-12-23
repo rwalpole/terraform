@@ -14,6 +14,9 @@ provider "aws" {
   region = "eu-west-2"
 }
 
+################################################################################
+# Editorial Web Frontend Server
+################################################################################
 resource "aws_instance" "frontend_server" {
   ami           = "ami-084e8c05825742534"
   instance_type = "t2.micro"
@@ -23,7 +26,9 @@ resource "aws_instance" "frontend_server" {
   }
 }
 
-### IAM config ###
+################################################################################
+# CodeDeploy Service Role
+################################################################################
 resource "aws_iam_role" "CodeDeployServiceRole2" {
   name        = "CodeDeployServiceRole2"
   description = "Allows CodeDeploy to call AWS services such as Auto Scaling on your behalf."
@@ -44,6 +49,12 @@ resource "aws_iam_role" "CodeDeployServiceRole2" {
 EOF
 }
 
+
+resource "aws_iam_role_policy_attachment" "AWSCodeDeployRole" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"
+  role       = aws_iam_role.CodeDeployServiceRole2.name
+}
+
 /*
 resource "aws_iam_instance_profile" "test_profile" {
   name = "test_profile"
@@ -51,6 +62,9 @@ resource "aws_iam_instance_profile" "test_profile" {
 }
 */
 
+################################################################################
+# CodeDeploy EC2 Instance Profile
+################################################################################
 resource "aws_iam_role" "code_deploy_ec2_instance_profile" {
   name = "code_deploy_ec2_instance_profile"
   path = "/"
@@ -98,10 +112,69 @@ resource "aws_iam_role" "editorial_frontend_github_actions" {
 }
 */
 
-resource "aws_iam_role_policy_attachment" "AWSCodeDeployRole" {
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"
-  role       = aws_iam_role.CodeDeployServiceRole2.name
+################################################################################
+# CodeDeploy User
+################################################################################
+resource "aws_iam_user" "cd_user" {
+  name = "cd_user"
+  #path = "/system/"
+  /*
+  tags = {
+    tag-key = "tag-value"
+  }
+  */
 }
+
+resource "aws_iam_user_policy" "cd_user_policy" {
+  name = "CodeDeployRolePolicy2"
+  user = aws_iam_user.cd_user.name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid = "CodeDeployAccessPolicy"
+        Effect = "Allow"
+        Action = [
+          "autoscaling:*",
+          "codedeploy:*",
+          "ec2:*",
+          #"lambda:*",
+          #"ecs:*",
+          # There is probably a whole bunch here we don't need
+          "elasticloadbalancing:*",
+          "iam:AddRoleToInstanceProfile",
+          "iam:AttachRolePolicy",
+          "iam:CreateInstanceProfile",
+          "iam:CreateRole",
+          "iam:DeleteInstanceProfile",
+          "iam:DeleteRole",
+          "iam:DeleteRolePolicy",
+          "iam:GetInstanceProfile",
+          "iam:GetRole",
+          "iam:GetRolePolicy",
+          "iam:ListInstanceProfilesForRole",
+          "iam:ListRolePolicies",
+          "iam:ListRoles",
+          "iam:PutRolePolicy",
+          "iam:RemoveRoleFromInstanceProfile",
+          "s3:*",
+          "ssm:*"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid = "CodeDeployRolePolicy"
+        Effect = "Allow"
+        Action = [
+          "iam:PassRole"
+        ],
+        Resource = aws_iam_role.CodeDeployServiceRole2.arn
+      }
+    ]
+  })
+}
+
+
 
 ### CodeDeploy Config ###
 
@@ -115,9 +188,9 @@ resource "aws_sns_topic" "example" {
 }
 */
 
-resource "aws_codedeploy_deployment_group" "CtdOmegaServicesPrototype-DepGrp2" {
+resource "aws_codedeploy_deployment_group" "CtdOmegaEditorialFrontend-DepGrp" {
   app_name               = aws_codedeploy_app.CtdOmegaEditorialFrontend.name
-  deployment_group_name  = "CtdOmegaServicesPrototype-DepGrp2"
+  deployment_group_name  = "CtdOmegaEditorialFrontend-DepGrp"
   service_role_arn       = aws_iam_role.CodeDeployServiceRole2.arn
   deployment_config_name = "CodeDeployDefault.AllAtOnce"
 
