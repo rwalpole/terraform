@@ -15,11 +15,42 @@ provider "aws" {
 }
 
 ################################################################################
+# CodeDeploy EC2 Instance Profile
+################################################################################
+resource "aws_iam_role" "code_deploy_ec2_instance_profile_role" {
+  name = "code_deploy_ec2_instance_profile_role"
+  description = "Allows EC2 instances to call AWS services on your behalf."
+  path = "/"
+
+  assume_role_policy = <<EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Action": "sts:AssumeRole",
+            "Principal": {
+               "Service": "ec2.amazonaws.com"
+            },
+            "Effect": "Allow",
+            "Sid": ""
+        }
+    ]
+}
+EOF
+}
+
+resource "aws_iam_instance_profile" "code_deploy_ec2_profile" {
+  name = "CodeDeployEC2Profile"
+  role = aws_iam_role.code_deploy_ec2_instance_profile_role.name
+}
+
+################################################################################
 # Editorial Web Frontend Server
 ################################################################################
 resource "aws_instance" "frontend_server" {
   ami           = "ami-084e8c05825742534"
   instance_type = "t2.micro"
+  iam_instance_profile = aws_iam_instance_profile.code_deploy_ec2_profile.name
 
   tags = {
     Name = "EditorialWeb"
@@ -62,29 +93,50 @@ resource "aws_iam_instance_profile" "test_profile" {
 }
 */
 
-################################################################################
-# CodeDeploy EC2 Instance Profile
-################################################################################
-resource "aws_iam_role" "code_deploy_ec2_instance_profile" {
-  name = "code_deploy_ec2_instance_profile"
-  path = "/"
 
-  assume_role_policy = <<EOF
+
+################################################################################
+# CodeDeploy EC2 Permissions
+################################################################################
+resource "aws_iam_policy" "code_deploy_ec2_permissions" {
+  name = "CodeDeployEC2Permissions"
+  description = "Gives access to ctd-omega-frontend-deployment S3 bucket"
+  policy = <<EOF
 {
     "Version": "2012-10-17",
     "Statement": [
-        {
-            "Action": "sts:AssumeRole",
-            "Principal": {
-               "Service": "ec2.amazonaws.com"
-            },
-            "Effect": "Allow",
-            "Sid": ""
-        }
+      {
+        "Action": [
+          "s3:Get*",
+          "s3:List*"
+        ],
+        "Effect": "Allow",
+        "Resource": [
+          "arn:aws:s3:::ctd-omega-frontend-deployment/*",
+          "arn:aws:s3:::aws-codedeploy-eu-west-2/*"
+        ]
+      }
     ]
 }
 EOF
 }
+
+resource "aws_iam_role_policy_attachment" "code_deploy_ec2_attach" {
+  role = aws_iam_role.code_deploy_ec2_instance_profile_role.name
+  policy_arn = aws_iam_policy.code_deploy_ec2_permissions.arn
+}
+
+################################################################################
+# Enable EC2 instance to use AWS Systems Manager for Code Deploy
+################################################################################
+resource "aws_iam_role_policy_attachment" "code_deploy_ssm_attach" {
+  role       = aws_iam_role.code_deploy_ec2_instance_profile_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+
+
+
 
 /*
 resource "aws_iam_role" "editorial_frontend_github_actions" {
@@ -125,9 +177,58 @@ resource "aws_iam_user" "cd_user" {
   */
 }
 
-resource "aws_iam_user_policy" "cd_user_policy" {
-  name = "CodeDeployRolePolicy2"
-  user = aws_iam_user.cd_user.name
+resource "aws_iam_policy" "CodeDeployAccess" {
+  name = "CodeDeployAccess"
+  #user = aws_iam_user.cd_user.name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        #Sid = "CodeDeployAccessPolicy"
+        Effect = "Allow"
+        Action = [
+          "autoscaling:*",
+          "codedeploy:*",
+          "ec2:*",
+          #"lambda:*",
+          #"ecs:*",
+          # There is probably a whole bunch here we don't need
+          "elasticloadbalancing:*",
+          "iam:AddRoleToInstanceProfile",
+          "iam:AttachRolePolicy",
+          "iam:CreateInstanceProfile",
+          "iam:CreateRole",
+          "iam:DeleteInstanceProfile",
+          "iam:DeleteRole",
+          "iam:DeleteRolePolicy",
+          "iam:GetInstanceProfile",
+          "iam:GetRole",
+          "iam:GetRolePolicy",
+          "iam:ListInstanceProfilesForRole",
+          "iam:ListRolePolicies",
+          "iam:ListRoles",
+          "iam:PutRolePolicy",
+          "iam:RemoveRoleFromInstanceProfile",
+          "s3:*",
+          "ssm:*"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid = "CodeDeployRolePolicy"
+        Effect = "Allow"
+        Action = [
+          "iam:PassRole"
+        ],
+        Resource = aws_iam_role.CodeDeployServiceRole2.arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "cd_role_policy" {
+  name = "CodeDeployRole"
+  role = aws_iam_role.CodeDeployServiceRole2.id
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -173,6 +274,7 @@ resource "aws_iam_user_policy" "cd_user_policy" {
     ]
   })
 }
+
 
 
 
@@ -241,5 +343,39 @@ resource "aws_s3_bucket_public_access_block" "web_deployment_public_access_block
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
+}
+
+################################################################################
+# GitHub OIDC Provider
+# Note: This is one per AWS account
+################################################################################
+resource "aws_iam_openid_connect_provider" "github_oidc" {
+  url = "https://token.actions.githubusercontent.com"
+
+  client_id_list = ["sts.amazonaws.com"]
+
+  thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
+}
+
+################################################################################
+# GitHub OIDC Role
+################################################################################
+module "iam_github_oidc_role" {
+  source = "terraform-aws-modules/iam/aws//modules/iam-github-oidc-role"
+
+  name = "iam_github_oidc"
+
+  # This should be updated to suit your organization, repository, references/branches, etc.
+  subjects = [
+    # You can prepend with `repo:` but it is not required
+    "repo:nationalarchives/ctd-omega-editorial-frontend:*"
+  ]
+
+  policies = {
+    additional = aws_iam_policy.CodeDeployAccess.arn
+    S3FullAccess = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+  }
+
+  #tags = local.tags
 }
 

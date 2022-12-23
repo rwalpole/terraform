@@ -1,36 +1,6 @@
-################################################################################
-# GitHub OIDC Provider
-# Note: This is one per AWS account
-################################################################################
-resource "aws_iam_openid_connect_provider" "github_oidc" {
-  url = "https://token.actions.githubusercontent.com"
 
-  client_id_list = ["sts.amazonaws.com"]
 
-  thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
-}
 
-################################################################################
-# GitHub OIDC Role
-################################################################################
-module "iam_github_oidc_role" {
-  source = "terraform-aws-modules/iam/aws//modules/iam-github-oidc-role"
-
-  name = "iam_github_oidc"
-
-  # This should be updated to suit your organization, repository, references/branches, etc.
-  subjects = [
-    # You can prepend with `repo:` but it is not required
-    "repo:nationalarchives/ctd-omega-editorial-frontend:*"
-  ]
-
-  policies = {
-    #additional = aws_iam_policy.github_ctd_omega_editorial_frontend.arn
-    S3FullAccess = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
-  }
-
-  #tags = local.tags
-}
 
 #data "tls_certificate" "github_thumbprint" {
 #  certificates =[{
