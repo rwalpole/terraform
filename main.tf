@@ -44,6 +44,11 @@ resource "aws_iam_instance_profile" "code_deploy_ec2_profile" {
   role = aws_iam_role.code_deploy_ec2_instance_profile_role.name
 }
 
+resource "aws_key_pair" "deployer" {
+  key_name = "deployer-key"
+  public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC1i2MVPWhX0cBkSwcrWPP01yALw/yZH6n7Jobx7JQYS/UJOGKqz7GwW4uG3YZwRCIm4dQdmiOH6VqfQ/xVAE+ashPM+ZEpBWAyRe7JNyRMMUNXoGphqHr0IAUNMcP16U5W2gR5SYIQyLAoFDKuwiK1kpCvy/1HyzYY8U1I4g06hlqK+m7SCJF1lEsoDdpOfwrgVsv9DKApdWAeII8Vq2ZgNffKNp+v/G2F8a81ucPBBcVt6WOaqIeNw+f6TbiAMuAHx4CbtQrdDkePwziy0dC+dKzHVZ3NdmLbdCJPR6jku7DX/LGzDYdXZ0qdkQL8MkFFvJAhR0VRe1+mZour3Q1P"
+}
+
 ################################################################################
 # Editorial Web Frontend Server
 ################################################################################
@@ -51,11 +56,14 @@ resource "aws_instance" "frontend_server" {
   ami           = "ami-084e8c05825742534"
   instance_type = "t2.micro"
   iam_instance_profile = aws_iam_instance_profile.code_deploy_ec2_profile.name
+  key_name = aws_key_pair.deployer.key_name
 
   tags = {
     Name = "EditorialWeb"
   }
 }
+
+
 
 ################################################################################
 # CodeDeploy Service Role
