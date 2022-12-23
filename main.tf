@@ -19,7 +19,7 @@ resource "aws_instance" "frontend_server" {
   instance_type = "t2.micro"
 
   tags = {
-    Name = "editorial_web"
+    Name = "EditorialWeb"
   }
 }
 
@@ -72,6 +72,7 @@ resource "aws_iam_role" "code_deploy_ec2_instance_profile" {
 EOF
 }
 
+/*
 resource "aws_iam_role" "editorial_frontend_github_actions" {
   name = "editorial_frontend_github_actions"
 
@@ -95,6 +96,7 @@ resource "aws_iam_role" "editorial_frontend_github_actions" {
     tag-key = "tag-value"
   }
 }
+*/
 
 resource "aws_iam_role_policy_attachment" "AWSCodeDeployRole" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"
@@ -123,7 +125,7 @@ resource "aws_codedeploy_deployment_group" "CtdOmegaServicesPrototype-DepGrp2" {
     ec2_tag_filter {
       key   = "Name"
       type  = "KEY_AND_VALUE"
-      value = "CodeDeployDemo2"
+      value = "EditorialWeb"
     }
 
   }
