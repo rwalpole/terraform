@@ -52,8 +52,15 @@ resource "aws_key_pair" "deployer" {
 ################################################################################
 # Editorial Web Frontend Server
 ################################################################################
+resource "aws_launch_template" "install_code_deploy_agent" {
+  user_data = filebase64("${path.module}/install-code-deploy-agent.sh")
+}
+
 resource "aws_instance" "frontend_server" {
   ami           = "ami-084e8c05825742534"
+  launch_template {
+    name = aws_launch_template.install_code_deploy_agent.name
+  }
   instance_type = "t2.micro"
   iam_instance_profile = aws_iam_instance_profile.code_deploy_ec2_profile.name
   key_name = aws_key_pair.deployer.key_name
@@ -88,20 +95,10 @@ resource "aws_iam_role" "CodeDeployServiceRole2" {
 EOF
 }
 
-
 resource "aws_iam_role_policy_attachment" "AWSCodeDeployRole" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"
   role       = aws_iam_role.CodeDeployServiceRole2.name
 }
-
-/*
-resource "aws_iam_instance_profile" "test_profile" {
-  name = "test_profile"
-  role = aws_iam_role..role.name
-}
-*/
-
-
 
 ################################################################################
 # CodeDeploy EC2 Permissions
